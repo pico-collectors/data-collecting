@@ -92,9 +92,9 @@ class Connection:
 
         return data
 
-    def send(self, message: bytes):
+    def send(self, message: bytes, end=b''):
         """ Sends a message in bytes through the connection """
-        pass
+        self._socket_connection.sendall(message + end)
 
     def close(self):
         """
