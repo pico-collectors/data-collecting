@@ -1,4 +1,5 @@
 import logging
+import socket
 import threading
 
 from data_collecting.connection import connect
@@ -45,32 +46,45 @@ class DataCollector(threading.Thread):
         was_stopped = False
 
         while not was_stopped:
+            try:
+                logger.info("Trying to connect to %s:%d" % self._producer_address)
 
-            logger.info("Trying to connect to %s:%d" %
-                        (self._producer_address[0], self._producer_address[1]))
+                with connect(self._producer_address,
+                             recv_timeout=self._message_period) as connection:
 
-            with connect(self._producer_address,
-                         recv_timeout=self._message_period) as connection:
+                    logger.info("Connected successfully")
 
-                logger.info("Connected successfully")
+                    # Notify the protocol of the new connection
+                    self._protocol.on_connection_established(connection)
 
-                # Notify the protocol of the new connection
-                self._protocol.on_connection_established(connection)
+                    while not self._to_stop.is_set():
 
-                while not self._to_stop.is_set():
+                        logger.info("Waiting for data...")
+                        data = connection.receive(end=self._protocol.end_marker)
+                        logger.info("Received a new data item")
 
-                    logger.info("Waiting for data...")
-                    data = connection.receive(end=self._protocol.end_marker)
-                    logger.info("Received a new data item")
+                        try:
+                            # Notify the protocol of the new data item
+                            self._protocol.on_data_received(connection, data)
 
-                    try:
-                        # Notify the protocol of the new data item
-                        self._protocol.on_data_received(connection, data)
+                        except CorruptedDataError as error:
+                            logger.info("%s: %s" % (str(error), data.decode()))
 
-                    except CorruptedDataError as error:
-                        logger.info("%s: %s" % (str(error), data.decode()))
+            except (socket.herror, socket.gaierror):
+                logger.error("The address of the producer is not valid")
+                break  # leave the function
 
-            logger.warning("Connection with producer failed unexpectedly")
+            except ConnectionAbortedError:
+                logger.warning("Connection aborted by the producer")
+            except socket.timeout:
+                logger.warning("Connection timed out")
+            except ConnectionRefusedError:
+                logger.warning("Cannot reach the producer")
+            except OSError as error:
+                logger.warning("OSError: %s" % str(error))
+
+            logger.warning("It will try to reconnect in approximately %d "
+                           "seconds" % int(self._reconnect_period))
 
             # Wait some time before reconnecting again
             # Meanwhile, if the stop() method is called this call unblocks
