@@ -16,14 +16,14 @@ class Protocol:
     """
 
     @property
-    def end_marker(self):
+    def end_marker(self) -> bytes:
         """
         Returns the marker that marks the end of each data stream expected by
         this protocol. Subclasses should override this method to adjust for
         they supported marker. If the subclass does not override this
         property getter it assumes the marker is '\r\n' by default.
         """
-        return '\r\n'
+        return b'\r\n'
 
     def on_connection_established(self, connection: Connection):
         """ Invoked by the DataCollector once a connection is established """
