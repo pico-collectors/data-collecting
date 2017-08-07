@@ -7,18 +7,22 @@ class Connection:
     and receive data.
     """
 
-    def __init__(self, socket_connection, address):
+    def __init__(self, socket_connection, address, recv_timeout):
         """
         Initializes a new connection adapter for the specified socket
         connection. This initializer should not be called directly. Instead,
         the 'connect' function should be used to create connection objects.
 
         :param socket_connection: the socket connection to be adapted
-        :param address: the address of the 'server' the connection was
-                        established with
+        :param address:           the address of the 'server' the connection
+                                  was established with
+        :param recv_timeout:      the timeout for receiving new data
         """
-        self._socket_connection = socket_connection   # type: socket.socket
+        self._socket_connection = socket_connection  # type: socket.socket
         self._destination_address = address
+
+        # Set the timeout for receiving new data
+        self._socket_connection.settimeout(recv_timeout)
 
         # Stores the data that may have been transferred during a receive call
         # and did not belong to the current data item
@@ -38,14 +42,11 @@ class Connection:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def receive(self, timeout=60.0, end=b'\r\n') -> bytes:
+    def receive(self, end=b'\r\n') -> bytes:
         """
         Blocks to receive data from the connection until it finds the
         'end' string.
         """
-        # Set the receive timeout
-        self._socket_connection.settimeout(timeout)
-
         # Get the extra bytes received in the previous call
         data = self._recv_cache
 
@@ -104,7 +105,7 @@ class Connection:
         self._socket_connection.close()
 
 
-def connect(address, timeout=30.0) -> Connection:
+def connect(address, connect_timeout=30.0, recv_timeout=60.0) -> Connection:
     """ Establishes a connection with the given address """
-    sock_connection = socket.create_connection(address, timeout)
-    return Connection(sock_connection, address)
+    sock_connection = socket.create_connection(address, connect_timeout)
+    return Connection(sock_connection, address, recv_timeout)
