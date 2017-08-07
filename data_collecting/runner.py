@@ -20,19 +20,19 @@ logger = logging.getLogger('')
 class Runner:
     """ Executes a data collector """
 
-    def __init__(self, producer_address, collector: DataCollector):
-        self._producer_address = producer_address
+    def __init__(self, collector: DataCollector):
         self._collector = collector
 
     def run(self):
         """ Runs the program """
 
-        # Ensure the TERMINATE signals are handled in the same way as KeyboardInterrupts
+        # Ensure the TERMINATE signals are handled in the same way as
+        # KeyboardInterrupts
         signal.signal(signal.SIGTERM, raise_keyboard_interrupt)
 
         try:
             logger.info("Started collecting data")
-            self._collector.collect_forever(self._producer_address)
+            self._collector.collect_forever()
 
         except KeyboardInterrupt:
             # user pressed Ctrl-C to close the program

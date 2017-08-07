@@ -19,12 +19,22 @@ class DataCollector(threading.Thread):
     """
 
     def __init__(self, producer_address, protocol: Protocol,
-                 reconnect_period: float=10.0):
-        """ Associates the data collector with a protocol """
+                 reconnect_period=10.0, message_period=60.0):
+        """
+        Associates the data collector with a protocol
+
+        :param producer_address: address of the producer to collect data from
+        :param protocol:         protocol used to communicate with the producer
+        :param reconnect_period: period between attempts to reconnect
+        :param message_period:   period with which new messages are expected
+        """
         super().__init__()
         self._producer_address = producer_address
         self._protocol = protocol
         self._reconnect_period = reconnect_period
+        self._message_period = message_period
+
+        # Event that indicates the service should stop
         self._to_stop = threading.Event()
 
     def run(self):
@@ -61,7 +71,7 @@ class DataCollector(threading.Thread):
             # stopped
             was_stopped = self._to_stop.wait(timeout=self._reconnect_period)
 
-    def collect_forever(self, producer_address):
+    def collect_forever(self):
         """
         Starts the collecting service for the given producer address. The
         service is run in its own thread. However, this call blocks until the
