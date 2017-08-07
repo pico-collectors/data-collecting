@@ -49,13 +49,16 @@ class DataCollector(threading.Thread):
             logger.info("Trying to connect to %s:%d" %
                         (self._producer_address[0], self._producer_address[1]))
 
-            with connect(self._producer_address) as connection:
+            with connect(self._producer_address,
+                         recv_timeout=self._message_period) as connection:
+
                 logger.info("Connected successfully")
 
                 # Notify the protocol of the new connection
                 self._protocol.on_connection_established(connection)
 
                 while not self._to_stop.is_set():
+
                     logger.info("Waiting for data...")
                     data = connection.receive(end=self._protocol.end_marker)
                     logger.info("Received a new data item")
@@ -67,8 +70,11 @@ class DataCollector(threading.Thread):
                     except CorruptedDataError as error:
                         logger.info("%s: %s" % (str(error), data.decode()))
 
-            # Wait some time for to reconnect again or for the service to be
-            # stopped
+            logger.warning("Connection with producer failed unexpectedly")
+
+            # Wait some time before reconnecting again
+            # Meanwhile, if the stop() method is called this call unblocks
+            # and the service exits
             was_stopped = self._to_stop.wait(timeout=self._reconnect_period)
 
     def collect_forever(self):
