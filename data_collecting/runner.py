@@ -12,15 +12,13 @@ Options:
 import logging
 import signal
 
-from data_collecting.data_collector import DataCollector
-
 logger = logging.getLogger('')
 
 
 class Runner:
     """ Executes a data collector """
 
-    def __init__(self, collector: DataCollector):
+    def __init__(self, collector):
         self._collector = collector
 
     def run(self):

@@ -3,35 +3,60 @@ import socket
 import threading
 
 from data_collecting.connection import connect, Connection
-from data_collecting.protocol import Protocol, CorruptedDataError
 
 logger = logging.getLogger('data_collector')
 
 
-class DataCollector(threading.Thread):
+class CorruptedDataError(Exception):
     """
-    The data collector provides the base mechanism to maintain a connection
-    with some producer and receiving data streams from it. It calls the
-    defined protocol every time a new connection is established with the
-    producer or a new data stream is received. To determine when a data
-    stream is complete it uses the end marker defined by the protocol.
+    Raised by the collector when the data received is corrupted or the
+    format is not correct.
+    """
+    pass
 
-    It works in its own thread.
+
+class BaseDataCollector(threading.Thread):
+    """
+    The base data collector provides the basis to implement any data
+    collector class. It works in its own thread.
+
+    It implements the base mechanism to maintain a connection with some
+    producer and to receive data streams from it. It defines two abstract
+    methods that subclasses must implement in order to provide any useful
+    operation to the data collector.
+        - on_connection_established:    this method is invoked every time
+            the data collector establishes a new connection with the producer.
+            This may occur multiple times during an execution, because
+            connections can fail and may need to be re-established.
+
+        - on_data_received:             this method is invoked every time a
+            new data stream is received from the producer. The data stream
+            received is passed as an argument. Subclasses should use this
+            method to implement the operations that need to be performed with
+            the data.
+
+    The base data collector also defines a read-only property 'end_maker',
+    which the value may be overridden when necessary. This end marker is used
+    to determine the end of a data stream. By default, the value of this
+    property is '\r\n'.
+
+    Note: the base data collector only handles bytes. This means that
+    subclasses are supposed to convert any data stream in bytes to the
+    required format.
     """
 
-    def __init__(self, producer_address, protocol: Protocol,
-                 reconnect_period=10.0, message_period=60.0):
+    def __init__(self, producer_address, reconnect_period=10.0,
+                 message_period=60.0):
         """
-        Associates the data collector with a protocol
+        Defines the address of the producer from which the data will be
+        collected. It also defines some settings for the connections.
 
         :param producer_address: address of the producer to collect data from
-        :param protocol:         protocol used to communicate with the producer
         :param reconnect_period: period between attempts to reconnect
         :param message_period:   period with which new messages are expected
         """
         super().__init__()
         self._producer_address = producer_address
-        self._protocol = protocol
         self._reconnect_period = reconnect_period
         self._message_period = message_period
 
@@ -40,7 +65,9 @@ class DataCollector(threading.Thread):
 
     def run(self):
         """
-        Executes the collecting service until the 'stop' method is called
+        Executes the collecting service until the 'stop' method is called.
+        It tries to maintain a connection with the producer and receive new
+        data stream from it.
         """
         # This flag indicates if the service was stopped or not
         was_stopped = False
@@ -103,8 +130,8 @@ class DataCollector(threading.Thread):
                          self._message_period) as connection:
                 logger.info("Connected successfully")
 
-                # Notify the protocol of the new connection
-                self._protocol.on_connection_established(connection)
+                # Notify the subclass of the new connection
+                self.on_connection_established(connection)
                 yield connection
 
         except ConnectionAbortedError:
@@ -118,16 +145,43 @@ class DataCollector(threading.Thread):
 
     def _collect(self, connection: Connection):
         """
-        Blocks waiting for new data. It notifies the protocol when a new
-        complete data stream is received.
+        Blocks waiting for a new data stream. Once a new data stream is
+        complete it sends it to the subclass and returns afterwards.
+        It logs a warning if the data stream is corrupted.
         """
         logger.info("Waiting for data...")
-        data = connection.receive(end=self._protocol.end_marker)
+        data = connection.receive(end=self.end_marker)
         logger.info("Received a new data item")
 
         try:
-            # Notify the protocol of the new data item
-            self._protocol.on_data_received(connection, data)
+            # Let the subclass handle the received data
+            self.on_data_received(connection, data)
 
         except CorruptedDataError as error:
-            logger.info("%s: %s" % (str(error), data.decode()))
+            logger.warning("%s: %s" % (str(error), data.decode()))
+
+    @property
+    def end_marker(self) -> bytes:
+        """
+        Returns the marker that marks the end of each data stream expected by
+        this collector. Subclasses should override this method to adjust for
+        they supported marker. If the subclass does not override this
+        property getter, it assumes the marker is '\r\n' by default.
+        """
+        return b'\r\n'
+
+    def on_connection_established(self, connection: Connection):
+        """ Invoked by the collector once a connection is established """
+        pass
+
+    def on_data_received(self, connection: Connection, data: bytes):
+        """
+        Invoked by the DataCollector once a new stream of data is received.
+        The data parameter contains the data stream that was obtained by the
+        data collector. It does NOT contain the end marker.
+
+        The subclass should decode the data stream and convert it into a data
+        item in any format that it requires and call the respective data
+        handlers with the decoded item.
+        """
+        pass
