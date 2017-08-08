@@ -2,7 +2,7 @@ import logging
 import socket
 import threading
 
-from data_collecting.connection import connect
+from data_collecting.connection import connect, Connection
 from data_collecting.protocol import Protocol, CorruptedDataError
 
 logger = logging.getLogger('data_collector')
@@ -46,49 +46,26 @@ class DataCollector(threading.Thread):
         was_stopped = False
 
         while not was_stopped:
+
             try:
-                logger.info("Trying to connect to %s:%d" % self._producer_address)
-
-                with connect(self._producer_address,
-                             recv_timeout=self._message_period) as connection:
-
-                    logger.info("Connected successfully")
-
-                    # Notify the protocol of the new connection
-                    self._protocol.on_connection_established(connection)
-
+                with self._connect() as connection:
                     while not self._to_stop.is_set():
-
-                        logger.info("Waiting for data...")
-                        data = connection.receive(end=self._protocol.end_marker)
-                        logger.info("Received a new data item")
-
-                        try:
-                            # Notify the protocol of the new data item
-                            self._protocol.on_data_received(connection, data)
-
-                        except CorruptedDataError as error:
-                            logger.info("%s: %s" % (str(error), data.decode()))
+                        self._collect(connection)
 
             except (socket.herror, socket.gaierror):
+                # Unrecoverable error, must stop the service!
                 logger.error("The address of the producer is not valid")
-                break  # leave the function
+                # Exit immediately
+                break
 
-            except ConnectionAbortedError:
-                logger.warning("Connection aborted by the producer")
-            except socket.timeout:
-                logger.warning("Connection timed out")
-            except ConnectionRefusedError:
-                logger.warning("Cannot reach the producer")
-            except OSError as error:
-                logger.warning("OSError: %s" % str(error))
-
+            # The program reaches this point when the connection with the
+            # producer fails
             logger.warning("It will try to reconnect in approximately %d "
                            "seconds" % int(self._reconnect_period))
 
             # Wait some time before reconnecting again
-            # Meanwhile, if the stop() method is called this call unblocks
-            # and the service exits
+            # Meanwhile, if the stop() method is called then it stops waiting
+            # and exits the service
             was_stopped = self._to_stop.wait(timeout=self._reconnect_period)
 
     def collect_forever(self):
@@ -107,3 +84,50 @@ class DataCollector(threading.Thread):
         away but it will be stopped eventually.
         """
         self._to_stop.set()
+
+    def _connect(self):
+        """
+        This works as a context manager. It connects to the producer and
+        yields the established connection.
+
+        It also handles connection errors. If the connection fails inside
+        the context then it logs a warning with the type of error.
+
+        It may raise a socket.herror or a socket.gaierror if the address of
+        the producer is not valid.
+        """
+
+        try:
+            logger.info("Trying to connect to %s:%d" % self._producer_address)
+            with connect(self._producer_address,
+                         self._message_period) as connection:
+                logger.info("Connected successfully")
+
+                # Notify the protocol of the new connection
+                self._protocol.on_connection_established(connection)
+                yield connection
+
+        except ConnectionAbortedError:
+            logger.warning("Connection aborted by the producer")
+        except socket.timeout:
+            logger.warning("Connection timed out")
+        except ConnectionRefusedError:
+            logger.warning("Cannot reach the producer")
+        except OSError as error:
+            logger.warning("OSError: %s" % str(error))
+
+    def _collect(self, connection: Connection):
+        """
+        Blocks waiting for new data. It notifies the protocol when a new
+        complete data stream is received.
+        """
+        logger.info("Waiting for data...")
+        data = connection.receive(end=self._protocol.end_marker)
+        logger.info("Received a new data item")
+
+        try:
+            # Notify the protocol of the new data item
+            self._protocol.on_data_received(connection, data)
+
+        except CorruptedDataError as error:
+            logger.info("%s: %s" % (str(error), data.decode()))
