@@ -34,5 +34,8 @@ class Protocol:
         Invoked by the DataCollector once a new stream of data is received.
         The data parameter contains the data stream that was obtained by the
         data collector. It does NOT contain the end marker.
+
+        The protocol should decode the data stream and convert it into a data
+        item and call the respective data handlers with the decoded item.
         """
         pass
