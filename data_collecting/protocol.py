@@ -12,7 +12,7 @@ class CorruptedDataError(Exception):
 class Protocol:
     """
     The base class to describe the protocol to communicate with the data
-    producer.
+    producers.
     """
 
     @property
