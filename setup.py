@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='data_collecting',
-    version='0.1',
+    version='0.2',
     description='Library containing the base for data collectors',
     url='https://github.com/pico-collectors/data_collecting.git',
     license='MIT',
