@@ -40,10 +40,11 @@ class Runner:
             logger.exception("Program was closed due to an unexpected error.")
             self._stop_collecting()
 
-    def _stop_collecting(self):
+        logger.info("Stopped collecting data")
+
+    @staticmethod
+    def _stop_collecting():
         logger.info("Stopping the collector...")
-        self._collector.stop()
-        logger.info("Stopped collector")
 
 
 def raise_keyboard_interrupt(signum, frame):
