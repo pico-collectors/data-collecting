@@ -1,6 +1,7 @@
 import logging
 import socket
 import threading
+from contextlib import contextmanager
 
 from data_collecting.connection import connect, Connection
 
@@ -112,6 +113,7 @@ class BaseDataCollector(threading.Thread):
         """
         self._to_stop.set()
 
+    @contextmanager
     def _connect(self):
         """
         This works as a context manager. It connects to the producer and
