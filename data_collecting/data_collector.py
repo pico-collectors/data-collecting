@@ -85,6 +85,10 @@ class BaseDataCollector(threading.Thread):
                 logger.error("The address of the producer is not valid")
                 # Exit immediately
                 break
+            except socket.timeout:
+                logger.warning("Connection timed out")
+            except ConnectionRefusedError:
+                logger.warning("Cannot reach the producer")
 
             # The program reaches this point when the connection with the
             # producer fails
@@ -125,25 +129,23 @@ class BaseDataCollector(threading.Thread):
         It may raise a socket.herror or a socket.gaierror if the address of
         the producer is not valid.
         """
+        logger.info("Trying to connect to %s:%d" % self._producer_address)
+        with connect(self._producer_address,
+                     self._message_period) as connection:
+            logger.info("Connected successfully")
 
-        try:
-            logger.info("Trying to connect to %s:%d" % self._producer_address)
-            with connect(self._producer_address,
-                         self._message_period) as connection:
-                logger.info("Connected successfully")
+            # Notify the subclass of the new connection
+            self.on_connection_established(connection)
 
-                # Notify the subclass of the new connection
-                self.on_connection_established(connection)
+            try:
                 yield connection
 
-        except ConnectionAbortedError:
-            logger.warning("Connection aborted by the producer")
-        except socket.timeout:
-            logger.warning("Connection timed out")
-        except ConnectionRefusedError:
-            logger.warning("Cannot reach the producer")
-        except OSError as error:
-            logger.warning("OSError: %s" % str(error))
+            except ConnectionAbortedError:
+                logger.warning("Connection aborted by the producer")
+            except socket.timeout:
+                logger.warning("Connection timed out")
+            except OSError as error:
+                logger.warning("OSError: %s" % str(error))
 
     def _collect(self, connection: Connection):
         """
