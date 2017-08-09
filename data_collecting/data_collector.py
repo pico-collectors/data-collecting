@@ -47,7 +47,7 @@ class BaseDataCollector(threading.Thread):
     """
 
     def __init__(self, producer_address, reconnect_period=10.0,
-                 message_period=60.0):
+                 message_period=60.0, max_msg_delay=10.0):
         """
         Defines the address of the producer from which the data will be
         collected. It also defines some settings for the connections.
@@ -60,6 +60,7 @@ class BaseDataCollector(threading.Thread):
         self._producer_address = producer_address
         self._reconnect_period = reconnect_period
         self._message_period = message_period
+        self._max_msg_delay = max_msg_delay
 
         # Event that indicates the service should stop
         self._to_stop = threading.Event()
@@ -131,7 +132,9 @@ class BaseDataCollector(threading.Thread):
         """
         logger.info("Trying to connect to %s:%d" % self._producer_address)
         with connect(self._producer_address,
-                     self._message_period) as connection:
+                     recv_timeout=self._message_period,
+                     max_msg_delay=self._max_msg_delay) as connection:
+
             logger.info("Connected successfully")
 
             # Notify the subclass of the new connection
