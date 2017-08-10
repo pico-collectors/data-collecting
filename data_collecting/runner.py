@@ -12,6 +12,10 @@ Options:
 import logging
 import signal
 
+import sys
+
+from data_collecting.exceptions import UnrecoverableError
+
 logger = logging.getLogger('')
 
 
@@ -34,17 +38,17 @@ class Runner:
 
         except KeyboardInterrupt:
             # user pressed Ctrl-C to close the program
-            self._stop_collecting()
+            logger.info("Stopping the collector...")
+
+        except UnrecoverableError as error:
+            logger.error(str(error))
+            sys.exit(1)
 
         except:
             logger.exception("Program was closed due to an unexpected error.")
-            self._stop_collecting()
+            sys.exit(1)
 
         logger.info("Stopped collecting data")
-
-    @staticmethod
-    def _stop_collecting():
-        logger.info("Stopping the collector...")
 
 
 def raise_keyboard_interrupt(signum, frame):

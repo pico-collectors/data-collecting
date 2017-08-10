@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from time import sleep
 
 from data_collecting.connection import connect, Connection
+from data_collecting.exceptions import UnrecoverableError
 
 
 class CorruptedDataError(Exception):
@@ -26,6 +27,7 @@ class BaseDataCollector:
     producer and to receive data streams from it. It defines two abstract
     methods that subclasses must implement in order to provide any useful
     operation to the data collector.
+
         - on_connection_established:    this method is invoked every time
             the data collector establishes a new connection with the producer.
             This may occur multiple times during an execution, because
@@ -75,10 +77,8 @@ class BaseDataCollector:
                         self._collect(connection)
 
             except (socket.herror, socket.gaierror):
-                # Unrecoverable error, must stop the service!
-                logger.error("The address of the producer is not valid")
-                # Exit immediately
-                break
+                raise UnrecoverableError("The address of the producer is "
+                                         "not valid")
             except socket.timeout:
                 logger.warning("Connection timed out")
             except ConnectionRefusedError:
